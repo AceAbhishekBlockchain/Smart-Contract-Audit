@@ -9,7 +9,7 @@ import { Search, BarChart3, UploadCloud, FileText, X } from 'lucide-react';
 const AuditorTab = ({
   contractAddress,
   setContractAddress,
-  handleAnalyzeContract,
+  handleAnalyzeContract, // This handles the initial analysis
   isLoading,
   progress,
   analysisResult,
@@ -36,6 +36,68 @@ const AuditorTab = ({
       duration: 2000,
     });
   }
+
+  // --- New function to handle PDF download ---
+  const handleDownloadReport = async () => {
+    if (!analysisResult) {
+      toast({
+        title: "No Analysis Result",
+        description: "Please analyze a contract first to generate a report.",
+        variant: "destructive",
+        duration: 3000,
+      });
+      return;
+    }
+
+    toast({
+      title: "Generating Report...",
+      description: "Your PDF report is being prepared for download.",
+      duration: 3000,
+    });
+
+    try {
+      // Replace with your actual backend endpoint
+      const response = await fetch('http://localhost:3001/generate-report', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(analysisResult), // Send the analysis result to backend
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        // Suggest a filename based on contract address or file name
+        const filename = `audit-report-${analysisResult.address ? analysisResult.address.substring(0, 10) : 'contract'}.pdf`;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url); // Clean up the object URL
+
+        toast({
+          title: "Report Downloaded",
+          description: "Your PDF report has been successfully downloaded.",
+          duration: 3000,
+        });
+      } else {
+        const errorText = await response.text();
+        throw new Error(`Failed to generate report: ${response.status} - ${errorText}`);
+      }
+    } catch (error) {
+      console.error("Error downloading report:", error);
+      toast({
+        title: "Report Download Failed",
+        description: `Could not generate PDF report. ${error.message}`,
+        variant: "destructive",
+        duration: 5000,
+      });
+    }
+  };
+  // --- End of new function ---
 
   return (
     <motion.div
@@ -164,7 +226,8 @@ const AuditorTab = ({
                 <Button 
                   variant="link" 
                   className="text-sky-400 hover:text-sky-300 p-0"
-                  onClick={() => toast({ title: "Mock Report", description: "This would typically link to a detailed PDF or webpage."})}
+                  // Changed onClick to call the new function
+                  onClick={handleDownloadReport} 
                 >
                   View Full Report (PDF)
                 </Button>
