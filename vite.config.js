@@ -25,12 +25,9 @@ observer.observe(document.documentElement, {
 });
 
 function handleViteOverlay(node) {
-	if (!node.shadowRoot) {
-		return;
-	}
+	if (!node.shadowRoot) return;
 
 	const backdrop = node.shadowRoot.querySelector('.backdrop');
-
 	if (backdrop) {
 		const overlayHtml = backdrop.outerHTML;
 		const parser = new DOMParser();
@@ -68,13 +65,12 @@ window.onerror = (message, source, lineno, colno, errorObj) => {
 };
 `;
 
-const configHorizonsConsoleErrroHandler = `
+const configHorizonsConsoleErrorHandler = `
 const originalConsoleError = console.error;
 console.error = function(...args) {
 	originalConsoleError.apply(console, args);
 
 	let errorString = '';
-
 	for (let i = 0; i < args.length; i++) {
 		const arg = args[i];
 		if (arg instanceof Error) {
@@ -100,7 +96,6 @@ const originalFetch = window.fetch;
 window.fetch = function(...args) {
 	const url = args[0] instanceof Request ? args[0].url : args[0];
 
-	// Skip WebSocket URLs
 	if (url.startsWith('ws:') || url.startsWith('wss:')) {
 		return originalFetch.apply(this, args);
 	}
@@ -108,26 +103,21 @@ window.fetch = function(...args) {
 	return originalFetch.apply(this, args)
 		.then(async response => {
 			const contentType = response.headers.get('Content-Type') || '';
-
-			// Exclude HTML document responses
-			const isDocumentResponse =
-				contentType.includes('text/html') ||
-				contentType.includes('application/xhtml+xml');
+			const isDocumentResponse = contentType.includes('text/html') || contentType.includes('application/xhtml+xml');
 
 			if (!response.ok && !isDocumentResponse) {
-					const responseClone = response.clone();
-					const errorFromRes = await responseClone.text();
-					const requestUrl = response.url;
-					console.error(\`Fetch error from \${requestUrl}: \${errorFromRes}\`);
+				const responseClone = response.clone();
+				const errorFromRes = await responseClone.text();
+				const requestUrl = response.url;
+				console.error(\`Fetch error from \${requestUrl}: \${errorFromRes}\`);
 			}
 
 			return response;
 		})
 		.catch(error => {
-			if (!url.match(/\.html?$/i)) {
+			if (!url.match(/\\.html?$/i)) {
 				console.error(error);
 			}
-
 			throw error;
 		});
 };
@@ -153,8 +143,8 @@ const addTransformIndexHtml = {
 				},
 				{
 					tag: 'script',
-					attrs: {type: 'module'},
-					children: configHorizonsConsoleErrroHandler,
+					attrs: { type: 'module' },
+					children: configHorizonsConsoleErrorHandler,
 					injectTo: 'head',
 				},
 				{
@@ -168,19 +158,20 @@ const addTransformIndexHtml = {
 	},
 };
 
+// Mute default Vite console warnings
 console.warn = () => {};
 
-const logger = createLogger()
-const loggerError = logger.error
+const logger = createLogger();
+const loggerError = logger.error;
 
 logger.error = (msg, options) => {
 	if (options?.error?.toString().includes('CssSyntaxError: [postcss]')) {
 		return;
 	}
-
 	loggerError(msg, options);
-}
+};
 
+// ✅ Final export with pdf-lib optimizeDeps
 export default defineConfig({
 	customLogger: logger,
 	plugins: [react(), addTransformIndexHtml],
@@ -192,9 +183,12 @@ export default defineConfig({
 		allowedHosts: true,
 	},
 	resolve: {
-		extensions: ['.jsx', '.js', '.tsx', '.ts', '.json', ],
+		extensions: ['.jsx', '.js', '.tsx', '.ts', '.json'],
 		alias: {
 			'@': path.resolve(__dirname, './src'),
 		},
+	},
+	optimizeDeps: {
+		include: ['pdf-lib'], // 👈 required to fix Vite + pdf-lib bundling issue
 	},
 });
