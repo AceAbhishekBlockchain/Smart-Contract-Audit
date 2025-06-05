@@ -5,11 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, BarChart3, UploadCloud, FileText, X } from 'lucide-react';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
 const AuditorTab = ({
   contractAddress,
   setContractAddress,
-  handleAnalyzeContract, // This handles the initial analysis
+  handleAnalyzeContract,
   isLoading,
   progress,
   analysisResult,
@@ -28,76 +29,57 @@ const AuditorTab = ({
   const handleRemoveFile = () => {
     setFileName('');
     if (fileInputRef.current) {
-      fileInputRef.current.value = ""; 
+      fileInputRef.current.value = "";
     }
     toast({
       title: "File Removed",
       description: "The selected file has been removed.",
       duration: 2000,
     });
-  }
+  };
 
-  // --- New function to handle PDF download ---
-  const handleDownloadReport = async () => {
-    if (!analysisResult) {
-      toast({
-        title: "No Analysis Result",
-        description: "Please analyze a contract first to generate a report.",
-        variant: "destructive",
-        duration: 3000,
-      });
-      return;
-    }
+  const generatePDFReport = async () => {
+    if (!analysisResult) return;
 
-    toast({
-      title: "Generating Report...",
-      description: "Your PDF report is being prepared for download.",
-      duration: 3000,
+    const { address, severity, reportSummary, vulnerabilitiesFound, predictionConfidence, details } = analysisResult;
+    const pdfDoc = await PDFDocument.create();
+    const page = pdfDoc.addPage();
+    const { width, height } = page.getSize();
+
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const fontSize = 12;
+    let y = height - 40;
+
+    const drawText = (text, options = {}) => {
+      const { font = font, size = fontSize, color = rgb(1, 1, 1), x = 50 } = options;
+      page.drawText(text, { x, y, size, font, color });
+      y -= size + 8;
+    };
+
+    drawText("Smart Contract Analysis Report", { font: boldFont, size: 18, color: rgb(0.2, 0.6, 1) });
+    drawText(`Contract Address: ${address}`);
+    drawText(`Overall Risk: ${severity}`);
+    drawText(`Summary: ${reportSummary}`);
+    drawText(`Vulnerabilities Found: ${vulnerabilitiesFound}`);
+    drawText(`Prediction Confidence: ${predictionConfidence}%`);
+    y -= 10;
+    drawText("Vulnerability Details:", { font: boldFont });
+
+    details.forEach(detail => {
+      drawText(`- ${detail.name} - ${detail.status} (Risk: ${detail.risk})`);
     });
 
-    try {
-      // Replace with your actual backend endpoint
-      const response = await fetch('http://localhost:3001/generate-report', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(analysisResult), // Send the analysis result to backend
-      });
-
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        // Suggest a filename based on contract address or file name
-        const filename = `audit-report-${analysisResult.address ? analysisResult.address.substring(0, 10) : 'contract'}.pdf`;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url); // Clean up the object URL
-
-        toast({
-          title: "Report Downloaded",
-          description: "Your PDF report has been successfully downloaded.",
-          duration: 3000,
-        });
-      } else {
-        const errorText = await response.text();
-        throw new Error(`Failed to generate report: ${response.status} - ${errorText}`);
-      }
-    } catch (error) {
-      console.error("Error downloading report:", error);
-      toast({
-        title: "Report Download Failed",
-        description: `Could not generate PDF report. ${error.message}`,
-        variant: "destructive",
-        duration: 5000,
-      });
-    }
+    const pdfBytes = await pdfDoc.save();
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "Contract_Analysis_Report.pdf";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
-  // --- End of new function ---
 
   return (
     <motion.div
@@ -124,12 +106,12 @@ const AuditorTab = ({
               onChange={(e) => {
                 setContractAddress(e.target.value);
                 if (e.target.value && fileName) {
-                  handleRemoveFile(); // Remove file if address is typed
+                  handleRemoveFile();
                 }
               }}
               disabled={isLoading}
             />
-             <Button
+            <Button
               onClick={() => handleAnalyzeContract(!!fileName)}
               disabled={isLoading}
               className="bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-semibold py-3 px-6 h-12 text-base shrink-0"
@@ -137,13 +119,13 @@ const AuditorTab = ({
               {isLoading ? 'Analyzing...' : 'Analyze Contract'}
             </Button>
           </div>
-          
-          <input 
+
+          <input
             type="file"
             ref={fileInputRef}
             onChange={handleFileChange}
             className="hidden"
-            accept=".sol,.vy,.txt" 
+            accept=".sol,.vy,.txt"
           />
 
           {fileName ? (
@@ -166,7 +148,6 @@ const AuditorTab = ({
               <UploadCloud className="mr-2 h-5 w-5" /> Upload Source Code (.sol, .vy)
             </Button>
           )}
-
 
           {isLoading && (
             <div className="space-y-2 mt-4">
@@ -226,10 +207,9 @@ const AuditorTab = ({
                 <Button 
                   variant="link" 
                   className="text-sky-400 hover:text-sky-300 p-0"
-                  // Changed onClick to call the new function
-                  onClick={handleDownloadReport} 
+                  onClick={generatePDFReport}
                 >
-                  View Full Report (PDF)
+                  Download PDF Report
                 </Button>
               </CardContent>
             </Card>
