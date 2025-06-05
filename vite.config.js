@@ -191,4 +191,9 @@ export default defineConfig({
 	optimizeDeps: {
 		include: ['pdf-lib'], // 👈 required to fix Vite + pdf-lib bundling issue
 	},
+	build: {
+  rollupOptions: {
+    external: ['pdf-lib']
+  }
+}
 });
